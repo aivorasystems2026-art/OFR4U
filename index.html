@@ -89,6 +89,10 @@
     color:var(--green-deep);display:flex;align-items:center;justify-content:center;
     font-family:'Fraunces',serif;font-weight:700;font-size:20px;
     box-shadow:0 4px 14px rgba(217,112,30,0.3);
+    overflow:hidden;
+  }
+  .shop-banner-logo img{
+    width:100%;height:100%;object-fit:cover;object-position:center;
   }
   .shop-banner-name{
     font-family:'Fraunces',serif;font-weight:700;font-size:18px;color:var(--green-deep);
@@ -157,6 +161,38 @@
   }
   .search-box input:focus{outline:2px solid var(--green-mid);outline-offset:1px;}
   .tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+  .shop-list{
+    display:flex;flex-direction:column;gap:8px;margin-bottom:16px;
+    max-height:280px;overflow-y:auto;
+  }
+  .shop-list-item{
+    display:flex;align-items:center;gap:12px;
+    background:#fff;border:1.5px solid var(--line);border-radius:12px;
+    padding:10px 14px;cursor:pointer;transition:all .15s ease;
+    box-shadow:var(--shadow);
+  }
+  .shop-list-item:active{transform:scale(0.98);}
+  .shop-list-item.selected{
+    border-color:var(--green-mid);background:var(--green-soft);
+  }
+  .shop-list-logo{
+    width:38px;height:38px;border-radius:50%;flex-shrink:0;
+    background:linear-gradient(135deg,var(--mustard),var(--orange));
+    color:var(--green-deep);display:flex;align-items:center;justify-content:center;
+    font-family:'Fraunces',serif;font-weight:700;font-size:14px;overflow:hidden;
+  }
+  .shop-list-logo img{width:100%;height:100%;object-fit:cover;object-position:center;}
+  .shop-list-text{flex:1;min-width:0;}
+  .shop-list-name{font-size:14px;font-weight:700;color:var(--ink);}
+  .shop-list-meta{font-size:11.5px;color:var(--ink-soft);margin-top:1px;}
+  .shop-list-check{
+    width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line);
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    font-size:11px;color:transparent;
+  }
+  .shop-list-item.selected .shop-list-check{
+    background:var(--green-mid);border-color:var(--green-mid);color:#fff;
+  }
   .tab-btn{
     border:1px solid var(--line);background:#fff;
     padding:8px 16px;border-radius:999px;font-size:13.5px;
@@ -328,8 +364,8 @@
 
 <main>
   <div class="section-title"><span class="dot"></span>Choose a Shop</div>
-  <div class="tabs" id="shopTabBar">
-    <div class="loading-state" style="padding:10px 14px;">Loading shops…</div>
+  <div class="shop-list" id="shopTabBar">
+    <div class="loading-state">Loading shops…</div>
   </div>
 
   <div class="section-title"><span class="dot"></span>Browse Items</div>
@@ -376,7 +412,7 @@
 
 <footer>
   <div>Offer4u — a directory of local shops</div>
-  <div class="credit">Powered by Aivora Systems</div>
+  <div class="credit">Powered by Offer4u</div>
 </footer>
 
 <script>
@@ -384,7 +420,7 @@
   // 1) PASTE YOUR SUPABASE PROJECT DETAILS HERE
   //    Get these from: Supabase Dashboard → Project Settings → API
   // =========================================================
-  const SUPABASE_URL = " https://zxrlbenaxmjsfgexpkup.supabase.co";      // e.g. https://xxxxx.supabase.co
+  const SUPABASE_URL = "https://zxrlbenaxmjsfgexpkup.supabase.co";      // e.g. https://xxxxx.supabase.co
   const SUPABASE_ANON_KEY = "sb_publishable_LsIi7VlsX2mRc6biHqgnZg_2aXDJOsL";    // the "anon public" key
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -396,27 +432,56 @@
   async function loadShops(){
     const bar = document.getElementById('shopTabBar');
     try{
-      const { data, error } = await sb.from('shop_profile').select('shop_name, district, address, phone').order('shop_name', { ascending:true });
+      const { data, error } = await sb.from('shop_profile').select('shop_name, district, address, phone, shoplogo').order('shop_name', { ascending:true });
       if (error) throw error;
       if (!data || data.length === 0){
-        bar.innerHTML = `<div class="loading-state" style="padding:10px 14px;">No shops registered yet.</div>`;
+        bar.innerHTML = `<div class="loading-state">No shops registered yet.</div>`;
         return;
       }
       allShops = data;
       currentShopName = 'ALL';
-
-      bar.innerHTML = `<button class="tab-btn active" data-shop="ALL">All Shops</button>` + data.map(s => `
-        <button class="tab-btn" data-shop="${escapeHtml(s.shop_name)}">${escapeHtml(s.shop_name)}</button>
-      `).join('');
+      renderShopTabBar();
 
       updateContactInfo(currentShopName);
-    updateShopBanner(currentShopName);
+      updateShopBanner(currentShopName);
       loadOffers();
       loadItems();
     }catch(e){
-      bar.innerHTML = `<div class="loading-state" style="padding:10px 14px;">Couldn't load shops. Check Supabase config.</div>`;
+      bar.innerHTML = `<div class="loading-state">Couldn't load shops. Check Supabase config.</div>`;
       console.error(e);
     }
+  }
+
+  // Renders "All Shops" plus every registered shop as a tappable list row
+  // with a small logo, name, and district — highlights the selected one.
+  function renderShopTabBar(){
+    const bar = document.getElementById('shopTabBar');
+    const allRow = `
+      <div class="shop-list-item${currentShopName === 'ALL' ? ' selected' : ''}" data-shop="ALL">
+        <div class="shop-list-logo">🏬</div>
+        <div class="shop-list-text">
+          <div class="shop-list-name">All Shops</div>
+          <div class="shop-list-meta">Browse every registered shop</div>
+        </div>
+        <div class="shop-list-check">✓</div>
+      </div>`;
+    const shopRows = allShops.map(s => {
+      const words = s.shop_name.trim().split(/\s+/);
+      const initials = words.length > 1 ? (words[0][0] + words[1][0]).toUpperCase() : s.shop_name.slice(0, 2).toUpperCase();
+      const logoInner = s.shoplogo
+        ? `<img src="${escapeHtml(s.shoplogo)}" alt="${escapeHtml(s.shop_name)}" onerror="this.parentElement.innerHTML='${initials}'">`
+        : initials;
+      return `
+      <div class="shop-list-item${currentShopName === s.shop_name ? ' selected' : ''}" data-shop="${escapeHtml(s.shop_name)}">
+        <div class="shop-list-logo">${logoInner}</div>
+        <div class="shop-list-text">
+          <div class="shop-list-name">${escapeHtml(s.shop_name)}</div>
+          <div class="shop-list-meta">${escapeHtml(s.district || '')}</div>
+        </div>
+        <div class="shop-list-check">✓</div>
+      </div>`;
+    }).join('');
+    bar.innerHTML = allRow + shopRows;
   }
 
   function updateShopBanner(shopName){
@@ -428,12 +493,17 @@
     const shop = allShops.find(s => s.shop_name === shopName);
     if (!shop){ banner.classList.remove('visible'); return; }
 
-    const words = shop.shop_name.trim().split(/\s+/);
-    const initials = words.length > 1
-      ? (words[0][0] + words[1][0]).toUpperCase()
-      : shop.shop_name.slice(0, 2).toUpperCase();
-
-    document.getElementById('shopBannerLogo').textContent = initials;
+    const logoEl = document.getElementById('shopBannerLogo');
+    if (shop.shoplogo){
+      logoEl.innerHTML = `<img src="${escapeHtml(shop.shoplogo)}" alt="${escapeHtml(shop.shop_name)}" onerror="this.parentElement.textContent=this.parentElement.dataset.fallback">`;
+    } else {
+      const words = shop.shop_name.trim().split(/\s+/);
+      const initials = words.length > 1
+        ? (words[0][0] + words[1][0]).toUpperCase()
+        : shop.shop_name.slice(0, 2).toUpperCase();
+      logoEl.dataset.fallback = initials;
+      logoEl.textContent = initials;
+    }
     document.getElementById('shopBannerName').textContent = shop.shop_name;
     banner.classList.add('visible');
   }
@@ -459,10 +529,10 @@
   }
 
   document.getElementById('shopTabBar').addEventListener('click', (e) => {
-    if (!e.target.classList.contains('tab-btn')) return;
-    document.querySelectorAll('#shopTabBar .tab-btn').forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    currentShopName = e.target.dataset.shop;
+    const row = e.target.closest('.shop-list-item');
+    if (!row) return;
+    currentShopName = row.dataset.shop;
+    renderShopTabBar();
     updateContactInfo(currentShopName);
     updateShopBanner(currentShopName);
     loadOffers();
@@ -557,8 +627,6 @@
           ${i.description ? `<div class="item-desc">${escapeHtml(i.description)}</div>` : ''}
           <div class="item-shop-block">
             <div class="item-shop-label">${escapeHtml(i.shop_name || '')}</div>
-            ${shopAddress ? `<div class="item-shop-meta">📍 ${escapeHtml(shopAddress)}</div>` : ''}
-            ${shop && shop.phone ? `<div class="item-shop-meta">📞 ${escapeHtml(shop.phone)}</div>` : ''}
           </div>
         </div>
       </div>
